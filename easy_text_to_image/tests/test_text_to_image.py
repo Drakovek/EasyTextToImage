@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import shutil
 import easy_text_to_image.text_to_image as etti
 import metadata_magic.file_tools as mm_file_tools
-from os.path import abspath, join
+from os.path import abspath, exists, join
 from PIL import Image, ImageDraw
 
 def test_get_font_locations():
@@ -22,6 +23,21 @@ def test_get_font_locations():
         fonts += len(mm_file_tools.find_files_of_type(directory, ".ttf"))
     assert fonts > 0
 
+def test_get_system_fonts():
+    """
+    Tests the get_all_system_fonts function.
+    """
+    # Test getting all system fonts
+    fonts = etti.get_system_fonts()
+    assert len(fonts) > 0
+    assert exists(fonts[0])
+    # Get the extenstions
+    extensions = []
+    for font in fonts:
+        extensions.append(re.findall(r"\..+$", font)[0])
+    assert ".ttf" in extensions
+    assert ".otc" in extensions or ".otf" in extensions or ".ttc" in extensions
+
 def test_get_font():
     """
     Tests the get_font function.
@@ -32,26 +48,29 @@ def test_get_font():
     font_dir_2 = abspath(join(temp_dir, "font_dir_2"))
     os.mkdir(font_dir_1)
     os.mkdir(font_dir_2)
-    mm_file_tools.write_text_file(abspath(join(font_dir_1, "test.otf")), "Not Font")
-    mm_file_tools.write_text_file(abspath(join(font_dir_2, "different.ttf")), "Not Font")
+    test_font = abspath(join(font_dir_1, "test.otf"))
+    different_font = abspath(join(font_dir_2, "different.ttf"))
+    mm_file_tools.write_text_file(test_font, "Not Font")
+    mm_file_tools.write_text_file(different_font, "Not Font")
     assert sorted(os.listdir(font_dir_1)) == ["test.otf"]
     assert sorted(os.listdir(font_dir_2)) == ["different.ttf"]
     # Test getting font that doesn't exist
-    font = etti.get_font("Blah", [font_dir_1, font_dir_2])
+    font = etti.get_font("Blah", [test_font, different_font])
     assert font is None
     # Test getting file that isn't a font
-    font = etti.get_font("test", [font_dir_1, font_dir_2])
+    font = etti.get_font("test", [test_font, different_font])
     assert font is None
-    font = etti.get_font("different", [font_dir_1, font_dir_2])
+    font = etti.get_font("different", [test_font, different_font])
     assert font is None
     # Test getting a vaild font
-    real_fonts = []
-    for location in etti.get_font_locations():
-        real_fonts.extend(mm_file_tools.find_files_of_type(location, ".ttf"))
-    assert len(real_fonts) > 0
-    shutil.copy(real_fonts[0], abspath(join(font_dir_2, "valid.ttf")))
+    new_font = abspath(join(font_dir_2, "valid.ttf"))
+    system_fonts = etti.get_system_fonts()
+    for system_font in system_fonts:
+        if system_font.endswith(".ttf"):
+            shutil.copy(system_font, new_font)
+    assert exists(new_font)
     assert sorted(os.listdir(font_dir_2)) == ["different.ttf", "valid.ttf"]
-    font = etti.get_font("valid", [font_dir_1, font_dir_2])
+    font = etti.get_font("valid", [test_font, different_font, new_font])
     assert not font.getname() == ("NOT REAL", "FONT")
 
 def test_get_basic_font():
@@ -59,22 +78,28 @@ def test_get_basic_font():
     Tests the get_basic_font function.
     """
     # Test getting a serif font
-    font_locations = etti.get_font_locations()
-    font = etti.get_basic_font("serif", font_locations)
+    system_fonts = etti.get_system_fonts()
+    font = etti.get_basic_font("serif", system_fonts)
     name = font.getname()[0]
-    assert name == "Garamond" or name == "Georgia" or name == "Baskerville" or name == "Times"
+    assert not name == "Aileron"
+    assert (name == "Garamond" or name == "Georgia" or name == "Baskerville"
+            or name == "Times" or name == "FreeSerif" or name == "DejaVu Serif")
     # Test getting a sans-serif font.
-    font = etti.get_basic_font("sans-serif", font_locations)
+    font = etti.get_basic_font("sans-serif", system_fonts)
     name = font.getname()[0]
-    assert name == "Helvetica" or name == "Arial" or name == "Verdana" or name == "Tahoma"
+    assert not name == "Aileron"
+    assert (name == "Helvetica" or name == "Arial" or name == "Verdana" or name == "Tahoma"
+            or name == "FreeSans" or name == "DejaVu Sans")
     # Test getting a monospace font.
-    font = etti.get_basic_font("monospace", font_locations)
+    font = etti.get_basic_font("monospace", system_fonts)
     name = font.getname()[0]
-    assert name == "Courier" or name == "Lucida" or name ==  "Monaco"
+    assert not name == "Aileron"
+    assert (name == "Courier" or name == "Lucida" or name ==  "Monaco"
+            or name == "FreeMono" or name == "DejaVu Sans Mono")
     # Test getting the default font
     font = etti.get_basic_font("serif", [])
     assert font.getname() == ("Aileron", "Regular")
-    font = etti.get_basic_font("blah", font_locations)
+    font = etti.get_basic_font("blah", system_fonts)
     assert font.getname() == ("Aileron", "Regular")
 
 def test_get_bounds():
@@ -105,29 +130,63 @@ def test_get_text_line_image():
     """
     # Test getting a center justified image
     font = etti.get_basic_font("serif", [])
-    image = etti.get_text_line_image("Text thing,", font, font_size=20, image_width=300, image_height=60,
-                foreground="#0000ffff", background="#ff0000ff", justified="c")
-    assert image.size == (300, 60)
+    image = etti.get_text_line_image("Text thing,", font, font_size=20, image_width=300,
+            foreground="#0000ffff", background="#ff0000ff", justified="c")
+    assert image.size == (300, 22)
     left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
-    assert top > 16 and top < 24
-    assert bottom > 36 and bottom < 44
-    assert left > 60 and left < 150
-    assert right < 250 and right > 150
+    assert top < 4
+    assert bottom > 18
+    assert left < 120
+    assert right > 180
     # Test getting a left justified image
-    image = etti.get_text_line_image("123jkl", font, font_size=72, image_width=600, image_height=100, justified="l")
-    assert image.size == (600, 100)
+    image = etti.get_text_line_image("123jkl", font, font_size=70, image_width=600, justified="l")
+    assert image.size == (600, 77)
     left, top, right, bottom = etti.get_bounds(image, "#000000ff", foreground=True)
-    assert top > 10 and top < 18
-    assert bottom > 82 and bottom < 90
+    assert top < 4
+    assert bottom > 65
     assert left < 4
-    assert right < 300
+    assert right > 160
     #Test getting a right justified image
-    image = etti.get_text_line_image("Many Words", font, font_size=32, image_width=400, image_height=80,
-                foreground="#ffff00ff", background="#ff0000ff", justified="r")
-    assert image.size == (400, 80)
+    image = etti.get_text_line_image("Many Words", font, font_size=32, image_width=400,
+                foreground="#ffff00ff", background="#ff0000ff", justified="r", space=1.5)
+    assert image.size == (400, 48)
     left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
-    assert top > 20 and top < 28
-    assert bottom > 52 and bottom < 60
-    assert left > 200
+    assert top < 4
+    assert bottom > 28
+    assert left < 250
     assert right > 396
     
+def test_get_text_multiline_image():
+    """
+    Tests the get_text_line_image function.
+    """
+    # Test getting a center justified image
+    font = etti.get_basic_font("serif", [])
+    image = etti.get_text_multiline_image(["Something", "text and", "such."],
+            font, font_size=30, image_width=300, foreground="#0000ffff",
+            background="#ff0000ff", justified="c")
+    assert image.size == (300, 99)
+    left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
+    assert top < 4
+    assert bottom > 80
+    assert left < 100
+    assert right > 200
+    # Test getting a left justified image
+    image = etti.get_text_multiline_image(["More things", "Stuff to read."],
+            font, font_size=20, image_width=200, justified="l")
+    assert image.size == (200, 44)
+    left, top, right, bottom = etti.get_bounds(image, "#000000ff", foreground=True)
+    assert top < 4
+    assert bottom > 30
+    assert left < 4
+    assert right > 90
+    # Test getting a right justified image
+    image = etti.get_text_multiline_image(["A", "B", "C", "D", "Yet More Things"],
+            font, font_size=72, image_width=700, foreground="#00aa00ff",
+            background="#000000ff", justified="r", space=1.5)
+    assert image.size == (700, 540)
+    left, top, right, bottom = etti.get_bounds(image, "#000000ff")
+    assert top < 4
+    assert bottom > 480
+    assert left < 500
+    assert right > 696
