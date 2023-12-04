@@ -456,18 +456,23 @@ def get_color_palette() -> (str, str, str):
     :return: Tuple of #RRGGBBAA formatted colors (foreground, background, text)
     :rtype: (str, str, str)
     """
-    # Randomly determine the text color, basing foreground and background values off of the result
-    text_color = "#000000ff"
+    # Randomly determine whether the text will be light or dark
+    text_value = 15
+    text_saturation = 50
     foreground_value = 30
     background_value = 90
     if random.randint(0, 1) == 1:
-        text_color = "#ffffffff"
+        text_value = 100
+        text_saturation = 20
         foreground_value = 90
         background_value = 30
     # Randomly determine the primary color
     foreground_hue = random.randint(0, 24) * 15
     r, g, b = ImageColor.getrgb(f"hsv({foreground_hue}, 100%, {foreground_value}%)")
     foreground_color = "#" + hex(r)[2:].zfill(2) +  hex(g)[2:].zfill(2) + hex(b)[2:].zfill(2) + "ff"
+    # Create the text color
+    r, g, b = ImageColor.getrgb(f"hsv({foreground_hue}, {text_saturation}%, {text_value}%)")
+    text_color = "#" + hex(r)[2:].zfill(2) +  hex(g)[2:].zfill(2) + hex(b)[2:].zfill(2) + "ff"
     # Randomly determine whether to use triadic or analogous color
     hue_shift = 30
     if random.randint(0, 1) == 1:

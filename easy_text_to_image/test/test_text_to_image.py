@@ -309,6 +309,6 @@ def test_get_color_palette():
     """
     for i in range(0, 50):
         foreground, background, text = etti.get_color_palette()
-        assert text == "#000000ff" or text == "#ffffffff"
+        assert len(re.findall(r"^#[0-9a-f]{6}ff$", text)) == 1
         assert len(re.findall(r"^#[0-9a-f]{6}ff$", foreground)) == 1
         assert len(re.findall(r"^#[0-9a-f]{6}ff$", background)) == 1
