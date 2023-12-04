@@ -5,7 +5,7 @@ import re
 import shutil
 import easy_text_to_image.text_to_image as etti
 import metadata_magic.file_tools as mm_file_tools
-from os.path import abspath, exists, join
+from os.path import abspath, basename, exists, join
 from PIL import Image, ImageDraw
 
 def test_get_font_locations():
@@ -81,26 +81,61 @@ def test_get_basic_font():
     system_fonts = etti.get_system_fonts()
     font = etti.get_basic_font("serif", system_fonts)
     name = font.getname()[0]
+    style = font.getname()[1].lower()
     assert not name == "Aileron"
-    assert (name == "Garamond" or name == "Georgia" or name == "Baskerville"
-            or name == "Times" or name == "FreeSerif" or name == "DejaVu Serif")
+    assert "bold" not in style
+    assert "italic" not in style and "oblique" not in style
     # Test getting a sans-serif font.
     font = etti.get_basic_font("sans-serif", system_fonts)
     name = font.getname()[0]
+    style = font.getname()[1].lower()
     assert not name == "Aileron"
-    assert (name == "Helvetica" or name == "Arial" or name == "Verdana" or name == "Tahoma"
-            or name == "FreeSans" or name == "DejaVu Sans")
+    assert "bold" not in style
+    assert "italic" not in style and "oblique" not in style
     # Test getting a monospace font.
     font = etti.get_basic_font("monospace", system_fonts)
     name = font.getname()[0]
+    style = font.getname()[1].lower()
     assert not name == "Aileron"
-    assert (name == "Courier" or name == "Lucida" or name ==  "Monaco"
-            or name == "FreeMono" or name == "DejaVu Sans Mono")
+    assert "bold" not in style
+    assert "italic" not in style and "oblique" not in style
+    # Test getting a bold font
+    font = etti.get_basic_font("serif", system_fonts, bold=True)
+    name = font.getname()[0]
+    style = font.getname()[1].lower()
+    assert not name == "Aileron"
+    assert "bold" in style
+    assert "italic" not in style and "oblique" not in style
+    # Test getting italic font
+    font = etti.get_basic_font("sans-serif", system_fonts, italic=True)
+    name = font.getname()[0]
+    style = font.getname()[1].lower()
+    assert not name == "Aileron"
+    assert "bold" not in style
+    assert "italic" in style or "oblique" in style
+    # Test getting bold-italic font
+    font = etti.get_basic_font("sans-serif", system_fonts, bold=True, italic=True)
+    name = font.getname()[0]
+    style = font.getname()[1].lower()
+    assert not name == "Aileron"
+    assert "bold" in style
+    assert "italic" in style or "oblique" in style
     # Test getting the default font
     font = etti.get_basic_font("serif", [])
     assert font.getname() == ("Aileron", "Regular")
     font = etti.get_basic_font("blah", system_fonts)
     assert font.getname() == ("Aileron", "Regular")
+    # Test getting fallback font if bold/italic font can't be found
+    temp_dir = mm_file_tools.get_temp_dir()
+    new_font = abspath(join(temp_dir, "Georgia.ttf"))
+    for system_font in system_fonts:
+        if system_font.endswith(".ttf"):
+            shutil.copy(system_font, new_font)
+    assert exists(new_font)
+    font = etti.get_basic_font("serif", [new_font], bold=True)
+    name = font.getname()[0]
+    style = font.getname()[1].lower()
+    assert not name == "Aileron"
 
 def test_get_bounds():
     """
@@ -267,3 +302,13 @@ def test_text_image_fit_box():
     assert bottom > 135
     assert left < 8
     assert right > 292
+
+def test_get_color_palette():
+    """
+    Tests the get_color_palette function.
+    """
+    for i in range(0, 50):
+        foreground, background, text = etti.get_color_palette()
+        assert text == "#000000ff" or text == "#ffffffff"
+        assert len(re.findall(r"^#[0-9a-f]{6}ff$", foreground)) == 1
+        assert len(re.findall(r"^#[0-9a-f]{6}ff$", background)) == 1

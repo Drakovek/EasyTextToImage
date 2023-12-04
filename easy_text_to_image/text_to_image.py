@@ -2,6 +2,7 @@
 
 import re
 import math
+import random
 import textwrap
 import metadata_magic.file_tools as mm_file_tools
 from PIL import Image, ImageColor, ImageDraw, ImageFont
@@ -54,7 +55,7 @@ def get_system_fonts() -> List[str]:
     # Return the list of fonts
     return fonts
 
-def get_font(font_name:str, fonts:List[str]) -> ImageFont:
+def get_font(font_name:str, fonts:List[str], font_style:str=None) -> ImageFont:
     """
     Returns a Pillow ImageFont object for a font with the given name.
     Returns None if no valid font was found
@@ -63,6 +64,8 @@ def get_font(font_name:str, fonts:List[str]) -> ImageFont:
     :type font_name: str, required
     :param fonts: List of paths to system fonts
     :type fonts: List[str]
+    :param font_style: Substyle of the font to attempt using, defaults to None
+    :type font_style: str, optional
     :return: Pillow ImageFont object
     :rtype: PIL.ImageFont
     """
@@ -80,29 +83,55 @@ def get_font(font_name:str, fonts:List[str]) -> ImageFont:
     # Return None if the font could not be found
     return None
 
-def get_basic_font(font_style:str, fonts:List[str]) -> ImageFont:
+def get_basic_font(font_style:str, fonts:List[str], bold:bool=False, italic:bool=False) -> ImageFont:
     """
     Returns a Pillow ImageFont object for a font of a given style.
+    If a bold/italic version of a font style can't be found, the standard version of that font will be returned.
     Returns a default font if no valid font was found.
     
     :param font_style: Style of the font to search for ("serif", "sans-serif", or "monospace")
     :type font_style: str, required
     :param fonts: List of paths to system fonts
     :type fonts: List[str]
+    :param bold: Whether to try to get a bold version of this font, defaults to False
+    :type bold: bool, optional
+    :param italic:Whether to try to get a italic version of this font, defaults to False
+    :type italic: bool, optional
     :return: Pillow ImageFont object
     :rtype: PIL.ImageFont
     """
+    # Serif fonts
     font_types = dict()
-    font_types["serif"] = ["Garamond", "Georgia", "Baskerville", "Times", "FreeSerif", "DejaVuSerif"]
+    font_types["serif"] = ["Garamond", "Georgia", "Baskerville", "Times New Roman", "FreeSerif", "DejaVuSerif"]
+    font_types["serif-bold"] = ["Georgia Bold", "Times New Roman Bold", "FreeSerifBold", "DejaVuSerif-Bold"]
+    font_types["serif-italic"] = ["Georgia Italic", "Times New Roman Italic", "FreeSerifItalic", "DejaVuSerif-Italic"]
+    font_types["serif-bold-italic"] = ["Georgia Bold Italic", "Times New Roman Bold Italic", "FreeSerifBoldItalic", "DejaVuSerif-BoldItalic"]
+    # Sans-Serif fonts
     font_types["sans-serif"] = ["Helvetica", "Arial", "Verdana", "Tahoma", "FreeSans", "DejaVuSans"]
-    font_types["monospace"] = ["Courier", "Lucida", "Monaco", "FreeMono", "DejaVu Sans Mono"]
+    font_types["sans-serif-bold"] = ["Arial Bold", "Verdana Bold", "Tahoma Bold", "FreeSansBold", "DejaVuSans-Bold"]
+    font_types["sans-serif-italic"] = ["Arial Italic", "Verdana Italic", "FreeSansOblique", "DejaVuSans-Oblique"]
+    font_types["sans-serif-bold-italic"] = ["Arial Bold Italic", "Verdana Bold Italic", "FreeSansBoldOblique", "DejaVuSans-BoldOblique"]
+    # Monospace fonts
+    font_types["monospace"] = ["Courier", "Courier New", "Lucida", "Monaco", "FreeMono", "DejaVu Sans Mono"]
+    font_types["monospace-bold"] = ["Courier New Bold", "FreeMonoBold", "DejaVuSansMono-Bold"]
+    font_types["monospace-italic"] = ["Courier New Italic", "FreeMonoOblique", "DejaVuSansMono-Oblique"]
+    font_types["monospace-bold-italic"] = ["Courier New Bold Italic", "FreeMonoBoldOblique", "DejaVuSansMono-BoldOblique"]
+    # Add bold/italic qualifiers to the font key if necessary
+    font_key = font_style
+    if bold:
+        font_key = f"{font_key}-bold"
+    if italic:
+        font_key = f"{font_key}-italic"
     # Try to get a font
     try:
-        for font in font_types[font_style]:
+        for font in font_types[font_key]:
             image_font = get_font(font, fonts)
             if image_font is not None:
                 return image_font
     except KeyError: pass
+    # Try to get standard version of the font
+    if bold or italic:
+        return get_basic_font(font_style, fonts)
     # Return the default font if no fonts were found
     return ImageFont.load_default()
 
@@ -417,3 +446,44 @@ def text_image_fit_box(text:str, font:ImageFont, image_width:int, image_height:i
     background.alpha_composite(cropped, (0,y_position))
     # Return the image
     return background
+
+def get_color_palette() -> (str, str, str):
+    """
+    Returns a unique color palette with contrasting colors for text.
+    Palette is randomly generated with either triadic or analogous foreground and background colors.
+    Colors are generated for the foreground, background and text.
+    
+    :return: Tuple of #RRGGBBAA formatted colors (foreground, background, text)
+    :rtype: (str, str, str)
+    """
+    # Randomly determine the text color, basing foreground and background values off of the result
+    text_color = "#000000ff"
+    foreground_value = 30
+    background_value = 90
+    if random.randint(0, 1) == 1:
+        text_color = "#ffffffff"
+        foreground_value = 90
+        background_value = 30
+    # Randomly determine the primary color
+    foreground_hue = random.randint(0, 24) * 15
+    r, g, b = ImageColor.getrgb(f"hsv({foreground_hue}, 100%, {foreground_value}%)")
+    foreground_color = "#" + hex(r)[2:].zfill(2) +  hex(g)[2:].zfill(2) + hex(b)[2:].zfill(2) + "ff"
+    # Randomly determine whether to use triadic or analogous color
+    hue_shift = 30
+    if random.randint(0, 1) == 1:
+        hue_shift = 120
+    # Randomly determine whether to add or subtract the hue
+    if random.randint(0, 1) == 1:
+        hue_shift = hue_shift * -1
+    # Get the secondary hue
+    background_hue = foreground_hue + hue_shift
+    if background_hue > 359:
+        background_hue -= 360
+    if background_hue < 0:
+        background_hue += 360
+    # Get the secondary_color
+    r, g, b = ImageColor.getrgb(f"hsv({background_hue}, 100%, {background_value}%)")
+    background_color = "#" + hex(r)[2:].zfill(2) +  hex(g)[2:].zfill(2) + hex(b)[2:].zfill(2) + "ff"
+    # Return the color palette
+    return (foreground_color, background_color, text_color)
+    
