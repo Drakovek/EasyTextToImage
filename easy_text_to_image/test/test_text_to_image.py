@@ -137,6 +137,41 @@ def test_get_basic_font():
     style = font.getname()[1].lower()
     assert not name == "Aileron"
 
+def test_get_vertical_bounds():
+    """
+    Tests the get_vertical_bounds function.
+    """
+    # Test finding vertical bounds of a colored object
+    image = Image.new("RGB", size=(200, 200), color="#00ff00")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([(30, 30), (170, 170)], radius=30, fill="#ff0000")
+    assert etti.get_vertical_bounds(image, "#00ff00") == (30,171)
+    # Test finding vertical bounds based on foreground color
+    image = Image.new("RGB", size=(300, 200), color="#bb0000")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([(50, 62), (170, 189)], radius=30, fill="#00ff00")
+    assert etti.get_vertical_bounds(image, "#bb0000") == (62,190)
+
+def test_get_horizontal_bounds():
+    """
+    Tests the get_horizontal_bounds function.
+    """
+    # Test finding horizontal bounds of a colored object
+    image = Image.new("RGB", size=(200, 200), color="#00ff00")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([(30, 30), (170, 170)], radius=30, fill="#ff0000")
+    assert etti.get_horizontal_bounds(image, "#00ff00") == (30,171)
+    # Test finding vertical bounds based on foreground color
+    image = Image.new("RGB", size=(300, 200), color="#bb0000")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([(50, 62), (170, 189)], radius=30, fill="#00ff00")
+    assert etti.get_horizontal_bounds(image, "#bb0000") == (50,171)
+    # Test only scanning part of the image
+    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=20, end_y=100) == (50,171)
+    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=80, end_y=100) == (50,171)
+    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=0, end_y=30) == (0,300)
+    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=195) == (0,300)
+
 def test_get_bounds():
     """
     Tests the get_bounds function.
@@ -151,6 +186,11 @@ def test_get_bounds():
     draw = ImageDraw.Draw(image)
     draw.rounded_rectangle([(20, 50), (160, 180)], radius=30, fill="#00000000")
     assert etti.get_bounds(image, "#00000000", foreground=True) == (20,50,161,181)
+    # Test non-uniform box
+    image = Image.new("RGBA", size=(500, 300), color="#000000ff")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([(67, 83), (456, 224)], radius=30, fill="#005600ff")
+    assert etti.get_bounds(image, "#000000ff", foreground=False) == (67,83,457,225)
     # Test finding bounds that encompass the full image
     image = Image.new("RGB", size=(150, 150), color="#220000")
     assert etti.get_bounds(image, "#ff0000") == (0,0,150,150)
@@ -185,7 +225,7 @@ def test_get_text_line_image():
     assert right < 200
     #Test getting a right justified image
     image = etti.get_text_line_image("Many Words", font, font_size=32, image_width=400,
-                foreground="#ffff00ff", background="#ff0000ff", justified="r", space=1.5)
+                foreground="#ffff00ff", background="#ff0000ff", justified="r", space=1.5)    
     assert image.size[0] == 400
     assert image.size[1] < 50 and image.size[1] > 46
     left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")

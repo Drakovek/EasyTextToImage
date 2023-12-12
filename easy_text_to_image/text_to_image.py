@@ -135,9 +135,94 @@ def get_basic_font(font_style:str, fonts:List[str], bold:bool=False, italic:bool
     # Return the default font if no fonts were found
     return ImageFont.load_default()
 
+def get_vertical_bounds(image:Image, color:str, foreground:bool=False) -> (int, int):
+    """
+    Returns a tuple with a vertical bounding box of where a certain color or lack of color exists in an image.
+    
+    :param image: Image to search for the color within
+    :type image: PIL.Image, required
+    :param color: Foreground/Background color to search for/against
+    :type color: str, required
+    :param foreground: If true, searches for the color, otherwise searches for abscence of color, defaults to False
+    :type foreground: bool, optional
+    :return: Tuple of (top, bottom)
+    :rtype: (int, int)
+    """
+    # Set the default bounds
+    width, height = image.size
+    left, right, top, bottom = (-1, -1, -1, -1)
+    color_tuple = ImageColor.getrgb(color)
+    # Create a list of all the pixel values
+    image_array = list(image.getdata())
+    # Find the topmost part of the image that matches the color
+    length = len(image_array)
+    for top in range(0, length):
+        if (image_array[top] == color_tuple) is foreground:
+            break
+    top = math.floor(top/width)
+    # Find the bottommost part of the image that matches the color
+    for bottom in range(length-1, -1, -1):
+        if (image_array[bottom] == color_tuple) is foreground:
+            break
+    bottom = math.floor(bottom/width)+1
+    # Correct if the bounding values are invalid
+    if top > bottom or bottom == top:
+        top, bottom = (0, height)
+    # Return the bounds
+    return (top, bottom)
+
+def get_horizontal_bounds(image:Image, color:str, foreground:bool=False, start_y=0, end_y=-1) -> (int, int):
+    """
+    Returns a tuple with a horizontal bounding box of where a certain color or lack of color exists in an image.
+    
+    :param image: Image to search for the color within
+    :type image: PIL.Image, required
+    :param color: Foreground/Background color to search for/against
+    :type color: str, required
+    :param foreground: If true, searches for the color, otherwise searches for abscence of color, defaults to False
+    :type foreground: bool, optional
+    :param start_y: Y position to start scanning from in image, defaults to 0
+    :type start_y: int, optional
+    :param end_y: Y position to end scanning from in image, defaults to -1 (image height)
+    :type end_y: int, optional
+    :return: Tuple of (left, right)
+    :rtype: (int, int)
+    """
+    # Set the default bounds
+    width, height = image.size
+    left, right, top, bottom = (-1, -1, -1, -1)
+    color_tuple = ImageColor.getrgb(color)
+    # Create a list of all the pixel values
+    image_array = list(image.getdata())
+    # Get the range of y values to search through
+    start, end = start_y, end_y
+    if end < start:
+        end = height
+    # Find the topmost part of the image that matches the color
+    left = 0
+    for x in range(width-1, -1, -1):
+        for y in range(start, end):
+            item = (y*width) + x
+            if (image_array[item] == color_tuple) is foreground:
+                left = x
+                break
+    # Find the leftmost part of the image that matches the color
+    right = width
+    for x in range(0, width):
+        for y in range(start, end):
+            item = (y*width) + x
+            if (image_array[item] == color_tuple) is foreground:
+                right = x + 1
+                break
+    # Correct if the bounding values are invalid
+    if left > right or left == right:
+        left, right = (0, width)
+    # Return the bounds
+    return (left, right)
+
 def get_bounds(image:Image, color:str, foreground:bool=False) -> (int, int, int, int):
     """
-    Returns a tuple with a bounding box of where a certain color or lack of color exists in an image.
+    Returns a tuple with a full bounding box of where a certain color or lack of color exists in an image.
     
     :param image: Image to search for the color within
     :type image: PIL.Image, required
@@ -152,41 +237,9 @@ def get_bounds(image:Image, color:str, foreground:bool=False) -> (int, int, int,
     width, height = image.size
     left, right, top, bottom = (-1, -1, -1, -1)
     color_tuple = ImageColor.getrgb(color)
-    # Get the leftmost part of the image that matches the color
-    for left in range(0, width):
-        for y in range(0, height):
-            if (image.getpixel((left,y)) == color_tuple) is foreground:
-                break
-        else: continue
-        break
-    # Get the rightmost part of the image that matches the color
-    for right in range(width-1, -1, -1):
-        for y in range(0, height):
-            if (image.getpixel((right,y)) == color_tuple) is foreground:
-                right +=1
-                break
-        else: continue
-        break
-    # Get the topmost part of the image that matches the color
-    for top in range(0, height):
-        for x in range(0, width):
-            if (image.getpixel((x,top)) == color_tuple) is foreground:
-                break
-        else: continue
-        break
-    # Get the bottommost part of the image that matches the color
-    for bottom in range(height-1, -1, -1):
-        for x in range(0, width):
-            if (image.getpixel((x,bottom)) == color_tuple) is foreground:
-                bottom += 1
-                break
-        else: continue
-        break
-    # Correct if the bounding values are invalid
-    if left > right or left == right:
-        left, right = (0, width)
-    if top > bottom or bottom == top:
-        top, bottom = (0, height)
+    # Get the bounding box on each side
+    top, bottom = get_vertical_bounds(image, color, foreground)
+    left, right = get_horizontal_bounds(image, color, foreground, start_y=top, end_y=bottom)
     # Return the bounds
     return (left, top, right, bottom)
     
@@ -226,7 +279,7 @@ def get_text_line_image(text:str, font:ImageFont, font_size:int,
     rl, ref_top, rr, ref_bottom = altered_font.getbbox(TEXT_REF)
     ref_bottom +=1
     # Crop the image
-    left, top, right, bottom = get_bounds(image, "#00000000")
+    left, right = get_horizontal_bounds(image, "#00000000")
     image = image.crop((left, ref_top, right+1, ref_bottom))
     # Create the backround image with the right size
     image_height = math.floor((ref_bottom - ref_top) * space)
@@ -367,9 +420,8 @@ def text_image_fit_width(text:str, font:ImageFont, image_width:int,
     image = get_text_multiline_image(lines, font, font_size, image_width=image_width,
             foreground=foreground, background="#00000000", space=space, justified=justified)
     # Crop the image
-    left, top, right, bottom = get_bounds(image, "#00000000")
-    right = image.size[0]
-    cropped = image.crop((0, top, right, bottom))
+    top, bottom = get_vertical_bounds(image, "#00000000")
+    cropped = image.crop((0, top, image.size[0], bottom))
     # Add the background
     background = Image.new("RGBA", size=(cropped.size), color=background)
     background.alpha_composite(cropped, (0,0))
