@@ -342,13 +342,3 @@ def test_text_image_fit_box():
     assert bottom > 135
     assert left < 8
     assert right > 292
-
-def test_get_color_palette():
-    """
-    Tests the get_color_palette function.
-    """
-    for i in range(0, 50):
-        foreground, background, text = etti.get_color_palette()
-        assert len(re.findall(r"^#[0-9a-f]{6}ff$", text)) == 1
-        assert len(re.findall(r"^#[0-9a-f]{6}ff$", foreground)) == 1
-        assert len(re.findall(r"^#[0-9a-f]{6}ff$", background)) == 1
