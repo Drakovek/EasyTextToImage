@@ -115,7 +115,7 @@ def get_random_color_palette() -> dict:
     # Randomly select a either a triadic or tetradic palette
     hue_offset = int(360/random.randint(3,4))
     # Generate hues based on a random starting value
-    hues = get_hue_offsets(random.randint(0, 359), offset=hue_offset)
+    hues = get_hue_offsets(random.randint(0, 359), offset=hue_offset)[:2]
     hues = sorted(hues, reverse=(random.randint(0,1) == 1))
     # Create a dual hue palette from the randomly generated hues
     base_palette = get_dual_hue_palette(hues[0], hues[1])

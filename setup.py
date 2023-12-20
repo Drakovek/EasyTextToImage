@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Easy-Text-To-Image",
-    version="0.2.0",
+    version="0.2.1",
     author="Drakovek",
     author_email="DrakovekMail@gmail.com",
     description="A Python library to simplify creating images that display text.",
