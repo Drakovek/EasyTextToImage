@@ -9,7 +9,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Easy-Text-To-Image",
-    version="0.2.1",
+    version="0.3.0",
     author="Drakovek",
     author_email="DrakovekMail@gmail.com",
     description="A Python library to simplify creating images that display text.",
@@ -17,11 +17,11 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/Drakovek/EasyTextToImage",
     packages=setuptools.find_packages(),
-    install_requires=["Pillow", "Metadata-Magic"],
+    install_requires=["Pillow", "Metadata-Magic", "numpy"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent"
     ],
-    python_requires='>=3.0'
+    python_requires='>=3.8'
 )

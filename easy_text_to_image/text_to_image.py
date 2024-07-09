@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
+import os
 import re
+import copy
 import math
+import numpy
 import random
 import textwrap
-import metadata_magic.file_tools as mm_file_tools
 from PIL import Image, ImageColor, ImageDraw, ImageFont
-from os.path import abspath, basename, exists, expandvars, join
+from os.path import abspath, basename, exists, expandvars, isdir, join
 from typing import List
 
 TEXT_REF = "ÅBCDÉFGHIJKLMNÖPQRSTÜVWXYZ1234567890abcdefghijklmnopqrstuvwxyz"
@@ -39,21 +41,31 @@ def get_font_locations() -> List[str]:
     # Return the font directories
     return existing_directories
 
-def get_system_fonts() -> List[str]:
+def get_system_fonts(font_locations:List[str]) -> List[str]:
     """
     Returns a list of all the fonts installed on the system.
     
+    :param font_locations: Directories in which fonts are present
+    :type font_locations: List[str], required
     :return: List of paths to fonts on the system
     :rtype: List[str]
     """
-    # Get the system font locations
-    font_locations = get_font_locations()
     # Get fonts from each directory
     fonts = []
-    for location in font_locations:
-        fonts.extend(mm_file_tools.find_files_of_type(location, [".ttf", ".otf", ".otc", ".ttc"]))
+    directories = copy.deepcopy(font_locations)
+    while len(directories) > 0:
+        # Get files in the current directory
+        cur_files = os.listdir(directories[0])
+        # Run through files
+        for cur_file in cur_files:
+            full_file = abspath(join(directories[0], cur_file))
+            if isdir(full_file):
+                directories.append(full_file)
+            elif len(re.findall(r"\.ttf$|\.otf$|\.otc$|\.ttc$", full_file.lower())) > 0:
+                fonts.append(full_file)
+        del directories[0]
     # Return the list of fonts
-    return fonts
+    return sorted(fonts)
 
 def get_font(font_name:str, fonts:List[str], font_style:str=None) -> ImageFont:
     """
@@ -112,7 +124,7 @@ def get_basic_font(font_style:str, fonts:List[str], bold:bool=False, italic:bool
     font_types["sans-serif-italic"] = ["Arial Italic", "Verdana Italic", "FreeSansOblique", "DejaVuSans-Oblique"]
     font_types["sans-serif-bold-italic"] = ["Arial Bold Italic", "Verdana Bold Italic", "FreeSansBoldOblique", "DejaVuSans-BoldOblique"]
     # Monospace fonts
-    font_types["monospace"] = ["Courier", "Courier New", "Lucida", "Monaco", "FreeMono", "DejaVu Sans Mono"]
+    font_types["monospace"] = ["Courier", "Courier New", "Lucida", "Monaco", "FreeMono", "DejaVuSansMono"]
     font_types["monospace-bold"] = ["Courier New Bold", "FreeMonoBold", "DejaVuSansMono-Bold"]
     font_types["monospace-italic"] = ["Courier New Italic", "FreeMonoOblique", "DejaVuSansMono-Oblique"]
     font_types["monospace-bold-italic"] = ["Courier New Bold Italic", "FreeMonoBoldOblique", "DejaVuSansMono-BoldOblique"]
@@ -135,114 +147,53 @@ def get_basic_font(font_style:str, fonts:List[str], bold:bool=False, italic:bool
     # Return the default font if no fonts were found
     return ImageFont.load_default()
 
-def get_vertical_bounds(image:Image, color:str, foreground:bool=False) -> (int, int):
+def get_bounds(image:Image, color:str) -> (int, int, int, int):
     """
-    Returns a tuple with a vertical bounding box of where a certain color or lack of color exists in an image.
-    
-    :param image: Image to search for the color within
-    :type image: PIL.Image, required
-    :param color: Foreground/Background color to search for/against
-    :type color: str, required
-    :param foreground: If true, searches for the color, otherwise searches for abscence of color, defaults to False
-    :type foreground: bool, optional
-    :return: Tuple of (top, bottom)
-    :rtype: (int, int)
-    """
-    # Set the default bounds
-    width, height = image.size
-    left, right, top, bottom = (-1, -1, -1, -1)
-    color_tuple = ImageColor.getrgb(color)
-    # Create a list of all the pixel values
-    image_array = list(image.getdata())
-    # Find the topmost part of the image that matches the color
-    length = len(image_array)
-    for top in range(0, length):
-        if (image_array[top] == color_tuple) is foreground:
-            break
-    top = math.floor(top/width)
-    # Find the bottommost part of the image that matches the color
-    for bottom in range(length-1, -1, -1):
-        if (image_array[bottom] == color_tuple) is foreground:
-            break
-    bottom = math.floor(bottom/width)+1
-    # Correct if the bounding values are invalid
-    if top > bottom or bottom == top:
-        top, bottom = (0, height)
-    # Return the bounds
-    return (top, bottom)
+    Returns a tuple with a full bounding box for where a certain color occurs.
 
-def get_horizontal_bounds(image:Image, color:str, foreground:bool=False, start_y=0, end_y=-1) -> (int, int):
-    """
-    Returns a tuple with a horizontal bounding box of where a certain color or lack of color exists in an image.
-    
     :param image: Image to search for the color within
     :type image: PIL.Image, required
-    :param color: Foreground/Background color to search for/against
+    :param color: Color to search for in the image, formatted #RRGGBB
     :type color: str, required
-    :param foreground: If true, searches for the color, otherwise searches for abscence of color, defaults to False
-    :type foreground: bool, optional
-    :param start_y: Y position to start scanning from in image, defaults to 0
-    :type start_y: int, optional
-    :param end_y: Y position to end scanning from in image, defaults to -1 (image height)
-    :type end_y: int, optional
-    :return: Tuple of (left, right)
-    :rtype: (int, int)
-    """
-    # Set the default bounds
-    width, height = image.size
-    left, right, top, bottom = (-1, -1, -1, -1)
-    color_tuple = ImageColor.getrgb(color)
-    # Create a list of all the pixel values
-    image_array = list(image.getdata())
-    # Get the range of y values to search through
-    start, end = start_y, end_y
-    if end < start:
-        end = height
-    # Find the topmost part of the image that matches the color
-    left = 0
-    for x in range(width-1, -1, -1):
-        for y in range(start, end):
-            item = (y*width) + x
-            if (image_array[item] == color_tuple) is foreground:
-                left = x
-                break
-    # Find the leftmost part of the image that matches the color
-    right = width
-    for x in range(0, width):
-        for y in range(start, end):
-            item = (y*width) + x
-            if (image_array[item] == color_tuple) is foreground:
-                right = x + 1
-                break
-    # Correct if the bounding values are invalid
-    if left > right or left == right:
-        left, right = (0, width)
-    # Return the bounds
-    return (left, right)
-
-def get_bounds(image:Image, color:str, foreground:bool=False) -> (int, int, int, int):
-    """
-    Returns a tuple with a full bounding box of where a certain color or lack of color exists in an image.
-    
-    :param image: Image to search for the color within
-    :type image: PIL.Image, required
-    :param color: Foreground/Background color to search for/against
-    :type color: str, required
-    :param foreground: If true, searches for the color, otherwise searches for abscence of color, defaults to False
-    :type foreground: bool, optional
     :return: Tuple of (left, top, right, bottom)
     :rtype: (int, int, int, int)
     """
-    # Set the default bounds
-    width, height = image.size
-    left, right, top, bottom = (-1, -1, -1, -1)
-    color_tuple = ImageColor.getrgb(color)
-    # Get the bounding box on each side
-    top, bottom = get_vertical_bounds(image, color, foreground)
-    left, right = get_horizontal_bounds(image, color, foreground, start_y=top, end_y=bottom)
+    # Add differentiated background, if necessary
+    rgb = ImageColor.getrgb(color)
+    if image.mode == "RGBA":
+        background_color = (abs(255-rgb[0]), abs(255-rgb[1]), abs(255-rgb[2]))
+        background = Image.new("RGBA", size=image.size, color=background_color)
+        background.alpha_composite(image, (0, 0))
+        converted = background.convert("RGB")
+    else:
+        converted = image.convert("RGB")
+    # Convert image to indexed color
+    indexed = converted.convert("P", dither=Image.Dither.NONE)    
+    # Find the palette value closest to the given color
+    difference = 100000
+    palette_color = 500
+    palette = indexed.getpalette()
+    test = "Aa"
+    for index in indexed.getcolors():
+        i = index[1]*3
+        cur_color = (palette[i], palette[i+1], palette[i+2])
+        cur_dif = abs(cur_color[0]-rgb[0])
+        cur_dif += abs(cur_color[1]-rgb[1])
+        cur_dif += abs(cur_color[2]-rgb[2])
+        if cur_dif < difference:
+            difference = cur_dif
+            palette_color = cur_color
+            test = cur_color
+    color_num = indexed.palette.getcolor(palette_color)
+    # Create a numpy array from the indexed image
+    array = numpy.array(indexed.getdata()).reshape((indexed.size[1], indexed.size[0]))
+    # Find where the color occurs
+    y, x = numpy.where(array == color_num)
+    x = numpy.sort(x)
+    y = numpy.sort(y)
     # Return the bounds
-    return (left, top, right, bottom)
-    
+    return (x[0], y[0], x[len(x)-1]+1, y[len(y)-1]+1)
+
 def get_text_line_image(text:str, font:ImageFont, font_size:int,
             image_width:int, foreground:str="#000000ff", background:str="#ffffff00",
             space:float=1.2, justified:str="c") -> Image:
@@ -274,16 +225,16 @@ def get_text_line_image(text:str, font:ImageFont, font_size:int,
     altered_font = font.font_variant(size=font_size)
     # Print the text on the image
     draw = ImageDraw.Draw(image)
-    draw.text(xy=(1, 1), text=text, fill=foreground, font=altered_font)
+    draw.text(xy=(5, 1), text=text, fill=foreground, font=altered_font)
     # Get reference text bounding box
     rl, ref_top, rr, ref_bottom = altered_font.getbbox(TEXT_REF)
     ref_bottom +=1
     # Crop the image
-    left, right = get_horizontal_bounds(image, "#00000000")
-    image = image.crop((left, ref_top, right+1, ref_bottom))
+    left, top, right, bottom = get_bounds(image, foreground)
+    image = image.crop((left-1, ref_top, right+1, ref_bottom))
     # Create the backround image with the right size
     image_height = math.floor((ref_bottom - ref_top) * space)
-    background = Image.new("RGBA", size=(image_width, image_height), color=background)
+    background_image = Image.new("RGBA", size=(image_width, image_height), color=background)
     # Get the points in which to past the text
     text_width, text_height = image.size
     y = 1
@@ -294,9 +245,9 @@ def get_text_line_image(text:str, font:ImageFont, font_size:int,
     else:
         x = math.floor((image_width - text_width)/2)
     # Paste the text onto the image
-    background.alpha_composite(image, (x,y))
+    background_image.alpha_composite(image, (x,y))
     # Return the new image
-    return background
+    return background_image
 
 def get_text_multiline_image(lines:List[str], font:ImageFont, font_size:int,
             image_width:int, foreground:str="#000000ff", background:str="#ffffff00",
@@ -420,7 +371,13 @@ def text_image_fit_width(text:str, font:ImageFont, image_width:int,
     image = get_text_multiline_image(lines, font, font_size, image_width=image_width,
             foreground=foreground, background="#00000000", space=space, justified=justified)
     # Crop the image
-    top, bottom = get_vertical_bounds(image, "#00000000")
+    left, top, right, bottom = get_bounds(image, foreground)
+    top = top - 1
+    bottom = bottom + 1
+    if top < 0:
+        top = 0
+    if bottom > image.size[1]:
+        bottom = image.size[1]
     cropped = image.crop((0, top, image.size[0], bottom))
     # Add the background
     background = Image.new("RGBA", size=(cropped.size), color=background)

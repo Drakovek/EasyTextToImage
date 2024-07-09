@@ -4,9 +4,13 @@ import os
 import re
 import shutil
 import easy_text_to_image.text_to_image as etti
-import metadata_magic.file_tools as mm_file_tools
 from os.path import abspath, basename, exists, join
 from PIL import Image, ImageDraw
+from PIL.ImageFont import ImageFont
+
+TEST_DIRECTORY = abspath(join(abspath(join(abspath(__file__), os.pardir)), "test_files"))
+FONT_DIRECTORY = abspath(join(TEST_DIRECTORY, "fonts"))
+IMAGE_DIRECTORY = abspath(join(TEST_DIRECTORY, "images"))
 
 def test_get_font_locations():
     """
@@ -16,261 +20,166 @@ def test_get_font_locations():
     font_directories = etti.get_font_locations()
     assert len(font_directories) > 0
     assert len(font_directories) < 4
-    # Test that some fonts exist in the given directories
-    fonts = 0
-    for directory in font_directories:
-        assert "fonts" in directory.lower()
-        fonts += len(mm_file_tools.find_files_of_type(directory, ".ttf"))
-    assert fonts > 0
 
 def test_get_system_fonts():
     """
     Tests the get_all_system_fonts function.
     """
-    # Test getting all system fonts
-    fonts = etti.get_system_fonts()
-    assert len(fonts) > 0
-    assert exists(fonts[0])
-    # Get the extenstions
-    extensions = []
-    for font in fonts:
-        extensions.append(re.findall(r"\..+$", font)[0])
-    assert ".ttf" in extensions
-    assert ".otc" in extensions or ".otf" in extensions or ".ttc" in extensions
+    # Test getting all fonts on a system
+    fonts = etti.get_system_fonts([TEST_DIRECTORY])
+    assert len(fonts) == 6
+    assert basename(fonts[0]) == "DejaVuSans-Bold.ttf"
+    assert basename(fonts[1]) == "DejaVuSans-Oblique.ttf"
+    assert basename(fonts[2]) == "DejaVuSans.ttf"
+    assert basename(fonts[3]) == "DejaVuSansMono.ttf"
+    assert basename(fonts[4]) == "DejaVuSerif-BoldItalic.ttf"
+    assert basename(fonts[5]) == "DejaVuSerif.ttf"
+    assert abspath(join(fonts[0], os.pardir)) == FONT_DIRECTORY
 
 def test_get_font():
     """
     Tests the get_font function.
     """
-    # Create test fonts
-    temp_dir = mm_file_tools.get_temp_dir()
-    font_dir_1 = abspath(join(temp_dir, "font_dir_1"))
-    font_dir_2 = abspath(join(temp_dir, "font_dir_2"))
-    os.mkdir(font_dir_1)
-    os.mkdir(font_dir_2)
-    test_font = abspath(join(font_dir_1, "test.otf"))
-    different_font = abspath(join(font_dir_2, "different.ttf"))
-    mm_file_tools.write_text_file(test_font, "Not Font")
-    mm_file_tools.write_text_file(different_font, "Not Font")
-    assert sorted(os.listdir(font_dir_1)) == ["test.otf"]
-    assert sorted(os.listdir(font_dir_2)) == ["different.ttf"]
     # Test getting font that doesn't exist
-    font = etti.get_font("Blah", [test_font, different_font])
+    fonts = etti.get_system_fonts([TEST_DIRECTORY])
+    fonts.append(abspath(join(FONT_DIRECTORY, "DejaVu Font Licence.txt")))
+    font = etti.get_font("Blah", fonts)
     assert font is None
     # Test getting file that isn't a font
-    font = etti.get_font("test", [test_font, different_font])
-    assert font is None
-    font = etti.get_font("different", [test_font, different_font])
+    font = etti.get_font("DejaVu Font Licence", fonts)
     assert font is None
     # Test getting a vaild font
-    new_font = abspath(join(font_dir_2, "valid.ttf"))
-    system_fonts = etti.get_system_fonts()
-    for system_font in system_fonts:
-        if system_font.endswith(".ttf"):
-            shutil.copy(system_font, new_font)
-    assert exists(new_font)
-    assert sorted(os.listdir(font_dir_2)) == ["different.ttf", "valid.ttf"]
-    font = etti.get_font("valid", [test_font, different_font, new_font])
-    assert not font.getname() == ("NOT REAL", "FONT")
+    font = etti.get_font("DejaVuSans", fonts)
+    assert font.getname() == ("DejaVu Sans", "Book")
 
 def test_get_basic_font():
     """
     Tests the get_basic_font function.
     """
     # Test getting a serif font
-    system_fonts = etti.get_system_fonts()
-    font = etti.get_basic_font("serif", system_fonts)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" not in style
-    assert "italic" not in style and "oblique" not in style
+    all_fonts = fonts = etti.get_system_fonts([TEST_DIRECTORY])
+    font = etti.get_basic_font("serif", all_fonts)
+    assert font.getname() == ("DejaVu Serif", "Book")
     # Test getting a sans-serif font.
-    font = etti.get_basic_font("sans-serif", system_fonts)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" not in style
-    assert "italic" not in style and "oblique" not in style
+    font = etti.get_basic_font("sans-serif", all_fonts)
+    assert font.getname() == ("DejaVu Sans", "Book")
     # Test getting a monospace font.
-    font = etti.get_basic_font("monospace", system_fonts)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" not in style
-    assert "italic" not in style and "oblique" not in style
+    font = etti.get_basic_font("monospace", all_fonts)
+    assert font.getname() == ("DejaVu Sans Mono", "Book")
     # Test getting a bold font
-    font = etti.get_basic_font("serif", system_fonts, bold=True)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" in style
-    assert "italic" not in style and "oblique" not in style
+    font = etti.get_basic_font("sans-serif", all_fonts, bold=True)
+    assert font.getname() == ("DejaVu Sans", "Bold")
     # Test getting italic font
-    font = etti.get_basic_font("sans-serif", system_fonts, italic=True)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" not in style
-    assert "italic" in style or "oblique" in style
+    font = etti.get_basic_font("sans-serif", all_fonts, italic=True)
+    assert font.getname() == ("DejaVu Sans", "Oblique")
     # Test getting bold-italic font
-    font = etti.get_basic_font("sans-serif", system_fonts, bold=True, italic=True)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-    assert "bold" in style
-    assert "italic" in style or "oblique" in style
+    font = etti.get_basic_font("serif", all_fonts, bold=True, italic=True)
+    assert font.getname() == ("DejaVu Serif", "Bold Italic")
     # Test getting the default font
     font = etti.get_basic_font("serif", [])
     assert font.getname() == ("Aileron", "Regular")
-    font = etti.get_basic_font("blah", system_fonts)
+    font = etti.get_basic_font("blah", all_fonts)
     assert font.getname() == ("Aileron", "Regular")
     # Test getting fallback font if bold/italic font can't be found
-    temp_dir = mm_file_tools.get_temp_dir()
-    new_font = abspath(join(temp_dir, "Georgia.ttf"))
-    for system_font in system_fonts:
-        if system_font.endswith(".ttf"):
-            shutil.copy(system_font, new_font)
-    assert exists(new_font)
-    font = etti.get_basic_font("serif", [new_font], bold=True)
-    name = font.getname()[0]
-    style = font.getname()[1].lower()
-    assert not name == "Aileron"
-
-def test_get_vertical_bounds():
-    """
-    Tests the get_vertical_bounds function.
-    """
-    # Test finding vertical bounds of a colored object
-    image = Image.new("RGB", size=(200, 200), color="#00ff00")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(30, 30), (170, 170)], radius=30, fill="#ff0000")
-    assert etti.get_vertical_bounds(image, "#00ff00") == (30,171)
-    # Test finding vertical bounds based on foreground color
-    image = Image.new("RGB", size=(300, 200), color="#bb0000")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(50, 62), (170, 189)], radius=30, fill="#00ff00")
-    assert etti.get_vertical_bounds(image, "#bb0000") == (62,190)
-
-def test_get_horizontal_bounds():
-    """
-    Tests the get_horizontal_bounds function.
-    """
-    # Test finding horizontal bounds of a colored object
-    image = Image.new("RGB", size=(200, 200), color="#00ff00")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(30, 30), (170, 170)], radius=30, fill="#ff0000")
-    assert etti.get_horizontal_bounds(image, "#00ff00") == (30,171)
-    # Test finding vertical bounds based on foreground color
-    image = Image.new("RGB", size=(300, 200), color="#bb0000")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(50, 62), (170, 189)], radius=30, fill="#00ff00")
-    assert etti.get_horizontal_bounds(image, "#bb0000") == (50,171)
-    # Test only scanning part of the image
-    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=20, end_y=100) == (50,171)
-    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=80, end_y=100) == (50,171)
-    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=0, end_y=30) == (0,300)
-    assert etti.get_horizontal_bounds(image, "#bb0000", start_y=195) == (0,300)
+    font = etti.get_basic_font("monospace", all_fonts, bold=True)
+    assert font.getname() == ("DejaVu Sans Mono", "Book")
 
 def test_get_bounds():
     """
     Tests the get_bounds function.
     """
-    # Test finding bounds of a colored object
-    image = Image.new("RGB", size=(200, 200), color="#00ff00")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(30, 30), (170, 170)], radius=30, fill="#ff0000")
-    assert etti.get_bounds(image, "#00ff00") == (30,30,171,171)
-    # Test finding bounds based on foreground color
-    image = Image.new("RGBA", size=(200, 200), color="#0000acff")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(20, 50), (160, 180)], radius=30, fill="#00000000")
-    assert etti.get_bounds(image, "#00000000", foreground=True) == (20,50,161,181)
-    # Test non-uniform box
-    image = Image.new("RGBA", size=(500, 300), color="#000000ff")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle([(67, 83), (456, 224)], radius=30, fill="#005600ff")
-    assert etti.get_bounds(image, "#000000ff", foreground=False) == (67,83,457,225)
-    # Test finding bounds that encompass the full image
-    image = Image.new("RGB", size=(150, 150), color="#220000")
-    assert etti.get_bounds(image, "#ff0000") == (0,0,150,150)
-    assert etti.get_bounds(image, "#220000", foreground=True) == (0,0,150,150)
-    # Test finding bounds for a color that does not exist in the image
-    assert etti.get_bounds(image, "#002200", foreground=True) == (0,0,150,150)
-    assert etti.get_bounds(image, "#220000", foreground=False) == (0,0,150,150)
+    # Test finding the bounds of a colored object in a small image
+    small_image = Image.open(abspath(join(IMAGE_DIRECTORY, "small.png")))
+    assert small_image.size == (200, 100)
+    assert etti.get_bounds(small_image, "#d02000") == (157,72, 177, 92)
+    # Test finding bounds that encompasses the whole image
+    assert etti.get_bounds(small_image, "#404080") == (0,0, 200, 100)
+    # Test on a large image
+    small_image = Image.open(abspath(join(IMAGE_DIRECTORY, "large.png")))
+    assert small_image.size == (800, 1000)
+    assert etti.get_bounds(small_image, "#FFFFFF") == (32, 136, 520, 466)
+    assert etti.get_bounds(small_image, "#0000FF") == (718, 920, 800, 1000)
+    assert etti.get_bounds(small_image, "#FF0000") == (0, 0, 800, 1000)
+    # Test image with transparency
+    small_image = Image.open(abspath(join(IMAGE_DIRECTORY, "transparent.png")))
+    assert small_image.size == (300, 100)
+    assert etti.get_bounds(small_image, "#FFFFFF") == (72, 47, 289, 93)
+    assert etti.get_bounds(small_image, "#000000") == (7, 12, 60, 37)
 
 def test_get_text_line_image():
     """
     Tests the get_text_line_image function.
     """
     # Test getting a center justified image
-    font = etti.get_basic_font("serif", [])
+    fonts = etti.get_system_fonts([TEST_DIRECTORY])
+    font = etti.get_font("DejaVuSans", fonts)
     image = etti.get_text_line_image("Text thing,", font, font_size=20, image_width=300,
             foreground="#0000ffff", background="#ff0000ff", justified="c")
     assert image.size[0] == 300
-    assert image.size[1] < 28 and image.size[1] > 22
-    left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
-    assert top < 5
-    assert bottom > 18
-    assert left < 110
-    assert right > 190
+    assert image.size[1] < 30 and image.size[1] > 26
+    left, top, right, bottom = etti.get_bounds(image, "#0000ff")
+    assert top < 7
+    assert bottom > 22
+    assert left < 101
+    assert right > 199
     # Test getting a left justified image
     image = etti.get_text_line_image("123jkl", font, font_size=70, image_width=600, justified="l")
     assert image.size[0] == 600
-    assert image.size[1] < 85 and image.size[1] > 78
-    left, top, right, bottom = etti.get_bounds(image, "#000000ff", foreground=True)
-    assert top < 5
-    assert bottom > 60
-    assert left < 5
-    assert right < 200
+    assert image.size[1] < 99 and image.size[1] > 95
+    left, top, right, bottom = etti.get_bounds(image, "#000000")
+    assert top < 16
+    assert bottom > 80
+    assert left < 4
+    assert right > 199
     #Test getting a right justified image
     image = etti.get_text_line_image("Many Words", font, font_size=32, image_width=400,
                 foreground="#ffff00ff", background="#ff0000ff", justified="r", space=1.5)    
     assert image.size[0] == 400
-    assert image.size[1] < 50 and image.size[1] > 46
-    left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
-    assert top < 5
-    assert bottom > 28
-    assert left > 200
-    assert right > 395
+    assert image.size[1] < 59 and image.size[1] > 55
+    left, top, right, bottom = etti.get_bounds(image, "#ffff00")
+    assert top < 10
+    assert bottom > 37
+    assert left < 210
+    assert right > 396
     
 def test_get_text_multiline_image():
     """
     Tests the get_text_line_image function.
     """
     # Test getting a center justified image
-    font = etti.get_basic_font("serif", [])
+    fonts = etti.get_system_fonts([TEST_DIRECTORY])
+    font = etti.get_font("DejaVuSans", fonts)
     image = etti.get_text_multiline_image(["Something", "text and", "such."],
             font, font_size=30, image_width=300, foreground="#0000ffff",
             background="#ff0000ff", justified="c")
     assert image.size[0] == 300
-    assert image.size[1] < 110 and image.size[1] > 95
-    left, top, right, bottom = etti.get_bounds(image, "#ff0000ff")
-    assert top < 4
-    assert bottom > 86
-    assert left < 85
-    assert right > 215
+    assert image.size[1] < 128 and image.size[1] > 124
+    left, top, right, bottom = etti.get_bounds(image, "#0000ff")
+    assert top < 9
+    assert bottom > 112
+    assert left < 73
+    assert right > 226
     # Test getting a left justified image
     image = etti.get_text_multiline_image(["More things", "Stuff to read."],
             font, font_size=20, image_width=200, justified="l")
     assert image.size[0] == 200
-    assert image.size[1] < 55 and image.size[1] > 45
-    left, top, right, bottom = etti.get_bounds(image, "#000000ff", foreground=True)
-    assert top < 5
-    assert bottom > 38
-    assert left < 5
-    assert right < 130
+    assert image.size[1] < 58 and image.size[1] > 54
+    left, top, right, bottom = etti.get_bounds(image, "#000000")
+    assert top < 8
+    assert bottom > 47
+    assert left < 4
+    assert right > 127
     # Test getting a right justified image
     image = etti.get_text_multiline_image(["A", "B", "C", "D", "Yet More Things"],
             font, font_size=72, image_width=700, foreground="#00aa00ff",
             background="#000000ff", justified="r", space=1.5)
     assert image.size[0] == 700
-    assert image.size[1] < 530 and image.size[1] > 520
-    left, top, right, bottom = etti.get_bounds(image, "#000000ff")
-    assert top < 12
-    assert bottom > 485
-    assert left > 150
-    assert right > 695
+    assert image.size[1] < 622 and image.size[1] > 618
+    left, top, right, bottom = etti.get_bounds(image, "#00aa00")
+    assert top < 19
+    assert bottom > 578
+    assert left < 134
+    assert right > 696
 
 def test_get_word_wrap():
     """
@@ -297,12 +206,12 @@ def test_text_image_fit_width():
             foreground="#101010ff", background="#0000aaff",
             justified="l")
     assert image.size[0] == 300
-    assert image.size[1] > 540 and image.size[1] < 565
-    left, top, right, bottom = etti.get_bounds(image, "#0000aaff")
-    assert top < 4
-    assert bottom > 540
+    assert image.size[1] > 554 and image.size[1] < 558
+    left, top, right, bottom = etti.get_bounds(image, "#101010")
+    assert top < 3
+    assert bottom > 553
     assert left < 4
-    assert right > 285
+    assert right > 289
 
 def test_text_image_fit_box():
     """
@@ -315,30 +224,30 @@ def test_text_image_fit_box():
             foreground="#ffffffff", background="#300000ff",
             justified="c", vertical="t")
     assert image.size == (300, 400)
-    left, top, right, bottom = etti.get_bounds(image, "#300000ff")
-    assert top < 4
-    assert bottom < 385
-    assert left < 6
-    assert right > 294
+    left, top, right, bottom = etti.get_bounds(image, "#ffffff")
+    assert top < 7
+    assert bottom > 374
+    assert left < 7
+    assert right > 293
     # Test aligning text to the bottom of the image
     font = etti.get_basic_font("serif", [])
     image = etti.text_image_fit_box(text, font, image_width=300, image_height=200,
             foreground="#010101ff", background="#aaaaaaff",
             justified="l", vertical="b")
     assert image.size == (300, 200)
-    left, top, right, bottom = etti.get_bounds(image, "#aaaaaaff")
-    assert top > 50
-    assert bottom > 195
-    assert left < 5
-    assert right > 290
-     # Test aligning text vertically to the center of the image
+    left, top, right, bottom = etti.get_bounds(image, "#010101")
+    assert top < 72
+    assert bottom > 198
+    assert left < 4
+    assert right > 292
+    # Test aligning text vertically to the center of the image
     font = etti.get_basic_font("serif", [])
     image = etti.text_image_fit_box(text, font, image_width=300, image_height=150,
             foreground="#bb0000ff", background="#202020ff",
             justified="r", vertical="c")
     assert image.size == (300, 150)
-    left, top, right, bottom = etti.get_bounds(image, "#202020ff")
-    assert top < 15
-    assert bottom > 135
-    assert left < 8
-    assert right > 292
+    left, top, right, bottom = etti.get_bounds(image, "#bb0000")
+    assert top < 12
+    assert bottom > 138
+    assert left < 9
+    assert right > 296
